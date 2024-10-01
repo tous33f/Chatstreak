@@ -1,0 +1,164 @@
+<%- include('./partials/header.ejs') %>
+<body>
+    <%- include('./partials/navbar.ejs') %>
+    <div class="main-container">
+        <div class="users-section">
+            <% for( let i = 0; i < users.length; i++ ) { %>
+                <div class="user-item" user_id=<%= users[i].id %> >
+                    <div class="user-avatar gradient-4"></div>
+                    <span> <%= users[i].name %>  </span>
+                </div>
+            <% } %>
+        </div>
+
+            <div class="chat-section">
+                <div class="chat-messages">
+                    <div style="display: flex; justify-content: center; align-items: center; height: 100%;">
+                        <div style="background: linear-gradient(135deg, #4e54c8, #8f94fb); color: white; padding: 1rem; border-radius: 10px;">
+                            Select a user to chat
+                        </div>
+                    </div>
+                </div>
+            </div>
+         
+    </div>
+
+    <script>
+        function getRandomColor() {
+            return Math.floor(Math.random()*16777215).toString(16);
+        }
+
+        function setRandomGradient(element) {
+            const color1 = getRandomColor();
+            const color2 = getRandomColor();
+            element.style.background = `linear-gradient(135deg, #${color1}, #${color2})`;
+        }
+
+        document.addEventListener('DOMContentLoaded', (event) => {
+            const avatars = document.querySelectorAll('.user-avatar');
+            avatars.forEach(avatar => {
+                setRandomGradient(avatar);
+            });
+        });
+
+        //message logic
+        let userItems=document.getElementsByClassName("user-item")
+
+        let client=null
+
+        async function handler(userItem){
+                if( selected ){
+                    let sender=parseInt("<%= user.id %>")
+                    let recv=parseInt(userItem.getAttribute("user_id"))
+                    let response=await fetch("http://localhost:8080/api/v1/messages",{
+                        method: "POST",
+                        headers: {
+                            'Content-Type': 'application/json;charset=utf-8'
+                        },
+                        body: JSON.stringify({sender,recv})
+                    });
+                    let result=await response.json()
+                    let messages=``
+                    result.data.forEach( m=>{
+                        if(m.sender==sender){
+                            messages+=`
+                            <div class="message sent">
+                                    <div class="message-content"> ${m.message} </div>
+                            </div>
+                            `
+                        }
+                        else{
+                            messages+=`
+                            <div class="message received">
+                                    <div class="message-content"> ${m.message} </div>
+                            </div>
+                            `
+                        }
+                    } )
+                    let selectedFasle=`
+                        <div class="chat-messages">
+                            <div style="display: flex; justify-content: center; align-items: center; height: 100%;">
+                                <div style="background: linear-gradient(135deg, #4e54c8, #8f94fb); color: white; padding: 1rem; border-radius: 10px;">
+                                    Select a user to chat
+                                </div>
+                            </div>
+                        </div>
+                    `
+                    let selectedTrue=`
+                        <div class="chat-header">
+                                <div class="user-avatar gradient-4"></div>
+                                <span> {USER_NAME} </span>
+                                <button class="close-button">&times;</button>
+                                </div>
+                            <div class="chat-messages">
+                                {ALL_MESSAGES}
+                            </div>
+                            <div class="message-input">
+                                <input type="text" placeholder="Type a message...">
+                                <button type="button" >Send</button>
+                        </div>
+                    `
+                    let user_name=userItem.children[1].textContent.trim()
+                    selectedTrue=selectedTrue.replace("{USER_NAME}",user_name)
+                    selectedTrue=selectedTrue.replace("{ALL_MESSAGES}",messages)
+                    document.getElementsByClassName("chat-section")[0].innerHTML=selectedTrue
+                    document.getElementsByClassName("chat-header")[0].children[0].style.background=userItem.children[0].style.background
+
+                    //logic for sending and receiving messages
+                    if(client){
+                        client.close();
+                    }
+                    client=new WebSocket("ws://localhost:8080/")
+                    client.onmessage=(e)=>{
+                        let div=document.createElement("div")
+                        let data=JSON.parse(e.data)
+                        if(data.sender==sender){
+                            div.className="message sent"
+                        }
+                        else{
+                            div.className="message received"
+                        }
+                        div.innerHTML=` <div class="message-content"> ${data.message} </div> `
+                        document.getElementsByClassName('chat-messages')[0].appendChild(div)
+                    }
+                    client.onclose=(e)=>{
+                        client=null
+                        document.getElementsByClassName("chat-section")[0].innerHTML=selectedFasle
+                        if(e.code==3000){
+                            alert("Unauthorized access")
+                        }
+                        else if(e.code==1007){
+                            alert("Message not sent")
+                        }
+                        else if(e.code==1011){
+                            alert(`Unexpected error occured: ${e.reason}`)
+                        }
+                    }
+
+                    //setting additional events for buttons
+                    document.getElementsByClassName('message-input')[0].children[1].onclick=function(){
+                        const senderMessage=document.getElementsByClassName('message-input')[0].children[0]
+                        const data={ "sender":sender,"recv":recv,"message": senderMessage.value }
+                        client.send(JSON.stringify(data))
+                        senderMessage.value=""
+                    }
+                    document.getElementsByClassName('close-button')[0].onclick=function(){
+                        client.close()
+                        client=null
+                        document.getElementsByClassName("chat-section")[0].innerHTML=selectedFasle
+                    }
+                }
+                else{
+                    document.getElementsByClassName("chat-section")[0].innerHTML=selectedFasle
+                }
+                "<%= selected=!selected %>"
+            }
+
+        let selected= "<%= selected %>"
+        for(let i=0;i<userItems.length;i++){
+            userItems[i].onclick=()=>handler(userItems[i])
+        }
+
+    </script>
+</body>
+</html>
